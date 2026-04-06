@@ -957,8 +957,8 @@ function onClientSelect() {
   var clients = loadClients();
   var sel = document.getElementById("clientSelector");
   var chosen = clients.find(function(c){ return c.name === sel.value; });
-  if (chosen && chosen.scriptUrl) {
-    localStorage.setItem(SCRIPT_URL_KEY, chosen.scriptUrl);
+  if (chosen && chosen.eyewashScriptUrl) {
+    localStorage.setItem(SCRIPT_URL_KEY, chosen.eyewashScriptUrl);
   }
   updateClientWarning();
 }
@@ -999,11 +999,11 @@ function renderClientList() {
     nameRow.appendChild(delBtn);
     row.appendChild(nameRow);
     var urlRow = document.createElement("div"); urlRow.style.cssText="display:flex;align-items:center;gap:8px;";
-    var urlLbl = document.createElement("label"); urlLbl.style.cssText="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;min-width:60px;margin:0;"; urlLbl.textContent="Script URL"; urlRow.appendChild(urlLbl);
-    var urlIn = document.createElement("input"); urlIn.type="text"; urlIn.value=c.scriptUrl||""; urlIn.placeholder="https://script.google.com/macros/s/...";
+    var urlLbl = document.createElement("label"); urlLbl.style.cssText="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;min-width:60px;margin:0;"; urlLbl.textContent="Eyewash Inspection Script URL"; urlRow.appendChild(urlLbl);
+    var urlIn = document.createElement("input"); urlIn.type="text"; urlIn.value=c.eyewashScriptUrl||""; urlIn.placeholder="https://script.google.com/macros/s/...";
     urlIn.style.cssText="flex:1;font-size:11px;padding:6px 10px;background:var(--input-bg);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:var(--white);font-family:'Barlow',sans-serif;outline:none;";
-    urlIn.addEventListener("input", function(){ clients[idx].scriptUrl=urlIn.value; saveClients(clients); showSavedIndicator(); });
-    urlIn.addEventListener("blur",  function(){ clients[idx].scriptUrl=urlIn.value; saveClients(clients); });
+    urlIn.addEventListener("input", function(){ clients[idx].eyewashScriptUrl=urlIn.value; saveClients(clients); showSavedIndicator(); });
+    urlIn.addEventListener("blur",  function(){ clients[idx].eyewashScriptUrl=urlIn.value; saveClients(clients); });
     urlRow.appendChild(urlIn);
     row.appendChild(urlRow);
 
@@ -1022,7 +1022,7 @@ function renderClientList() {
         var fresh = loadClients();
         if (!fresh[idx2]) fresh[idx2] = {};
         fresh[idx2].name = ni.value;
-        fresh[idx2].scriptUrl = ui.value;
+        fresh[idx2].eyewashScriptUrl = ui.value;
         saveClients(fresh);
         renderClientSelector();
         updateClientWarning();
