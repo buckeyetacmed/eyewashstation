@@ -295,11 +295,51 @@ textarea{resize:vertical;min-height:80px;line-height:1.6;}
     <div id="clientList"></div>
     <div id="clientSavedMsg" style="display:none;font-size:12px;color:var(--green,#1e7d45);text-align:center;padding:6px;margin-bottom:4px;">&#x2713; Client list saved</div>
     <button onclick="addClientRow()" style="margin-top:10px;background:transparent;border:1.5px solid var(--gold);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:9px 18px;border-radius:5px;cursor:pointer;width:100%;">+ Add Client</button>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Backup / Restore Client List</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.5;">If clients disappear after refresh, copy the backup text below and paste it back to restore.</div>
+      <textarea id="clientBackupBox" rows="3" style="width:100%;background:var(--input-bg);border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:var(--white);font-family:monospace;font-size:11px;padding:8px 10px;resize:vertical;" placeholder="Client backup data will appear here after saving..."></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button onclick="copyClientBackup()" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:7px;border-radius:4px;cursor:pointer;">Copy Backup</button>
+        <button onclick="restoreClientBackup()" style="flex:1;background:var(--gold);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:7px;border-radius:4px;cursor:pointer;">Restore from Backup</button>
+      </div>
+    </div>
   </div>
 
   <div class="section-head">Google Sheet Setup</div>
   <div class="qr-intro">Connect this form to a dedicated Eyewash Inspection Sheet. Each submission logs automatically for real-time monitoring.</div>
 
+  <div class="setup-step">
+    <div class="step-num">Step 1 &mdash; Create a new Google Sheet</div>
+    <div class="step-text">Go to <code>sheets.google.com</code> and create a new sheet named e.g. <code>Metallus Eyewash Inspection Log</code>. Add these headers in row 1:<br><br>
+    <code>Date | Location | Inspector | Unit Type | Result | Failed Items | Notes | Photos</code></div>
+  </div>
+  <div class="setup-step">
+    <div class="step-num">Step 2 &mdash; Open Apps Script</div>
+    <div class="step-text">In your Sheet click <code>Extensions</code> &rarr; <code>Apps Script</code>. Delete any existing code, paste the script below, and click Save.</div>
+  </div>
+  <div class="script-box" id="scriptBox">function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+    sheet.appendRow([
+      data.date, data.location, data.inspector,
+      data.unitType, data.result, data.failedItems,
+      data.notes, data.photoCount + " photo(s)"
+    ]);
+    return ContentService.createTextOutput(JSON.stringify({status:"ok"})).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status:"error",message:err.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({status:"ok"})).setMimeType(ContentService.MimeType.JSON);
+}</div>
+  <button class="copy-btn" onclick="copyScript()">Copy Script</button>
+  <div class="setup-step">
+    <div class="step-num">Step 3 &mdash; Deploy as Web App</div>
+    <div class="step-text">Click <code>Deploy</code> &rarr; <code>New deployment</code>. Type: <code>Web app</code>. Execute as: <code>Me</code>. Who has access: <code>Anyone</code>. Click <code>Deploy</code> and authorize. Copy the Web App URL.</div>
+  </div>
   <div class="setup-step">
     <div class="step-num">Step 4 &mdash; Add URL to Client above</div>
     <div class="step-text">Copy the Web App URL after deploying and paste it into the <strong style="color:var(--gold);">Script URL</strong> field for that client in the <strong style="color:var(--gold);">Client Management</strong> section at the top of this Setup tab. The form will automatically use the correct URL when you select that client.</div>
@@ -677,6 +717,8 @@ function switchTab(tab) {
   document.getElementById("page-form").style.display   = tab==="form"  ? "block":"none";
   document.getElementById("page-setup").style.display  = tab==="setup" ? "block":"none";
   document.getElementById("page-success").style.display = "none";
+  if (tab === "form") { renderClientSelector(); updateClientWarning(); }
+  if (tab === "setup") { renderClientList(); updateBackupBox(); }
 }
 
 function renderItemThumbs(cid, container) {
@@ -867,11 +909,33 @@ function mk2(tag, cls) { var el=document.createElement(tag); if(cls) el.classNam
 var CLIENTS_KEY = "btm_clients";
 
 function loadClients() {
-  try { return JSON.parse(localStorage.getItem(CLIENTS_KEY)) || []; } catch(e) { return []; }
+  try {
+    var hash = window.location.hash;
+    if (hash && hash.indexOf("clients=") > -1) {
+      var encoded = hash.split("clients=")[1];
+      var decoded = decodeURIComponent(escape(atob(encoded)));
+      var parsed = JSON.parse(decoded);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        try { localStorage.setItem(CLIENTS_KEY, JSON.stringify(parsed)); } catch(e) {}
+        return parsed;
+      }
+    }
+  } catch(e) {}
+  try {
+    var raw = localStorage.getItem(CLIENTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
 }
 
 function saveClients(clients) {
-  localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+  var data = JSON.stringify(clients);
+  // Save to localStorage
+  try { localStorage.setItem(CLIENTS_KEY, data); } catch(e) {}
+  // ALSO save to URL hash - this ALWAYS survives refresh
+  try {
+    var encoded = btoa(unescape(encodeURIComponent(data)));
+    window.location.hash = "clients=" + encoded;
+  } catch(e) {}
 }
 
 function renderClientSelector() {
@@ -955,13 +1019,19 @@ function renderClientList() {
     savedLbl.textContent = "\u2713 Saved!";
     (function(ni, ui, idx2, sl) {
       saveBtn.addEventListener("click", function() {
-        clients[idx2].name = ni.value;
-        clients[idx2].scriptUrl = ui.value;
-        saveClients(clients);
+        // Always re-read from localStorage to avoid stale closure
+        var fresh = loadClients();
+        if (!fresh[idx2]) fresh[idx2] = {};
+        fresh[idx2].name = ni.value;
+        fresh[idx2].scriptUrl = ui.value;
+        saveClients(fresh);
         renderClientSelector();
+        updateClientWarning();
+        updateBackupBox();
         sl.style.display = "inline";
         clearTimeout(sl._t);
         sl._t = setTimeout(function(){ sl.style.display="none"; }, 2500);
+        console.log("Saved client:", ni.value);
       });
     })(nameIn, urlIn, idx, savedLbl);
     saveRow.appendChild(saveBtn);
@@ -978,6 +1048,40 @@ function addClientRow() {
   renderClientList();
 }
 
+function updateBackupBox() {
+  var box = document.getElementById("clientBackupBox");
+  if (!box) return;
+  var clients = loadClients().filter(function(c){ return c.name && c.name.trim(); });
+  box.value = clients.length > 0 ? JSON.stringify(clients, null, 2) : "";
+}
+
+function copyClientBackup() {
+  var box = document.getElementById("clientBackupBox");
+  if (!box || !box.value) { alert("No client data to copy. Save a client first."); return; }
+  navigator.clipboard.writeText(box.value).then(function(){
+    alert("Backup copied! Paste it into a notes app or email to keep it safe.");
+  }).catch(function(){
+    box.select(); document.execCommand("copy");
+    alert("Backup copied!");
+  });
+}
+
+function restoreClientBackup() {
+  var box = document.getElementById("clientBackupBox");
+  if (!box || !box.value.trim()) { alert("Paste your backup data into the box first."); return; }
+  try {
+    var clients = JSON.parse(box.value);
+    if (!Array.isArray(clients)) throw new Error("Invalid format");
+    saveClients(clients);
+    renderClientList();
+    renderClientSelector();
+    updateBackupBox();
+    alert("Restored " + clients.length + " client(s) successfully!");
+  } catch(e) {
+    alert("Could not restore - invalid backup data. Make sure you pasted the full backup text.");
+  }
+}
+
 function showSavedIndicator() {
   var msg = document.getElementById("clientSavedMsg");
   if (!msg) return;
@@ -991,6 +1095,12 @@ window.addEventListener("load", function(){
   renderClientSelector();
   renderClientList();
   updateClientWarning();
+  updateBackupBox();
+  // Second pass after short delay to catch any timing issues
+  setTimeout(function(){
+    renderClientSelector();
+    updateClientWarning();
+  }, 300);
 });
 </script>
 
