@@ -912,7 +912,8 @@ function loadClients() {
   try {
     var hash = window.location.hash;
     if (hash && hash.indexOf("clients=") > -1) {
-      var encoded = hash.split("clients=")[1];
+      var startIdx = hash.indexOf("clients=") + 8;
+      var encoded = decodeURIComponent(hash.substring(startIdx));
       var decoded = decodeURIComponent(escape(atob(encoded)));
       var parsed = JSON.parse(decoded);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -929,11 +930,10 @@ function loadClients() {
 
 function saveClients(clients) {
   var data = JSON.stringify(clients);
-  // Save to localStorage
   try { localStorage.setItem(CLIENTS_KEY, data); } catch(e) {}
-  // ALSO save to URL hash - this ALWAYS survives refresh
   try {
-    var encoded = btoa(unescape(encodeURIComponent(data)));
+    // Use encodeURIComponent on top of btoa to make it URL-safe
+    var encoded = encodeURIComponent(btoa(unescape(encodeURIComponent(data))));
     window.location.hash = "clients=" + encoded;
   } catch(e) {}
 }
