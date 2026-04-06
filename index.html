@@ -293,6 +293,7 @@ textarea{resize:vertical;min-height:80px;line-height:1.6;}
     <div class="section-head">Client Management</div>
     <div class="qr-intro">Add each company you service here. Select them from the dropdown at the top of the form before starting an inspection. The correct Google Sheet URL will be used automatically.</div>
     <div id="clientList"></div>
+    <div id="clientSavedMsg" style="display:none;font-size:12px;color:var(--green,#1e7d45);text-align:center;padding:6px;margin-bottom:4px;">&#x2713; Client list saved</div>
     <button onclick="addClientRow()" style="margin-top:10px;background:transparent;border:1.5px solid var(--gold);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:9px 18px;border-radius:5px;cursor:pointer;width:100%;">+ Add Client</button>
   </div>
 
@@ -879,7 +880,7 @@ function renderClientSelector() {
   if (!sel) return;
   var current = sel.value;
   sel.innerHTML = '<option value="">-- Select Client --</option>';
-  clients.forEach(function(c) {
+  clients.filter(function(c){ return c.name && c.name.trim(); }).forEach(function(c) {
     var opt = document.createElement("option");
     opt.value = c.name;
     opt.textContent = c.name;
@@ -925,7 +926,8 @@ function renderClientList() {
     var nameLbl = document.createElement("label"); nameLbl.style.cssText="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;min-width:60px;margin:0;"; nameLbl.textContent="Company"; nameRow.appendChild(nameLbl);
     var nameIn = document.createElement("input"); nameIn.type="text"; nameIn.value=c.name||""; nameIn.placeholder="Company name";
     nameIn.style.cssText="flex:1;font-size:13px;padding:6px 10px;background:var(--input-bg);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:var(--white);font-family:'Barlow',sans-serif;outline:none;";
-    nameIn.addEventListener("input", function(){ clients[idx].name=nameIn.value; saveClients(clients); renderClientSelector(); });
+    nameIn.addEventListener("input", function(){ clients[idx].name=nameIn.value; saveClients(clients); renderClientSelector(); showSavedIndicator(); });
+    nameIn.addEventListener("blur",  function(){ clients[idx].name=nameIn.value; saveClients(clients); renderClientSelector(); });
     nameRow.appendChild(nameIn);
     var delBtn = document.createElement("button");
     delBtn.style.cssText="background:transparent;border:1px solid rgba(192,57,43,0.4);color:#e74c3c;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;padding:5px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;";
@@ -937,9 +939,34 @@ function renderClientList() {
     var urlLbl = document.createElement("label"); urlLbl.style.cssText="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;min-width:60px;margin:0;"; urlLbl.textContent="Script URL"; urlRow.appendChild(urlLbl);
     var urlIn = document.createElement("input"); urlIn.type="text"; urlIn.value=c.scriptUrl||""; urlIn.placeholder="https://script.google.com/macros/s/...";
     urlIn.style.cssText="flex:1;font-size:11px;padding:6px 10px;background:var(--input-bg);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:var(--white);font-family:'Barlow',sans-serif;outline:none;";
-    urlIn.addEventListener("input", function(){ clients[idx].scriptUrl=urlIn.value; saveClients(clients); });
+    urlIn.addEventListener("input", function(){ clients[idx].scriptUrl=urlIn.value; saveClients(clients); showSavedIndicator(); });
+    urlIn.addEventListener("blur",  function(){ clients[idx].scriptUrl=urlIn.value; saveClients(clients); });
     urlRow.appendChild(urlIn);
     row.appendChild(urlRow);
+
+    // Save Client button
+    var saveRow = document.createElement("div");
+    saveRow.style.cssText = "margin-top:10px;display:flex;gap:8px;align-items:center;";
+    var saveBtn = document.createElement("button");
+    saveBtn.textContent = "Save Client";
+    saveBtn.style.cssText = "background:var(--green,#1e7d45);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;border:none;border-radius:5px;padding:8px 18px;cursor:pointer;";
+    var savedLbl = document.createElement("span");
+    savedLbl.style.cssText = "font-size:12px;color:var(--green,#1e7d45);display:none;";
+    savedLbl.textContent = "\u2713 Saved!";
+    (function(ni, ui, idx2, sl) {
+      saveBtn.addEventListener("click", function() {
+        clients[idx2].name = ni.value;
+        clients[idx2].scriptUrl = ui.value;
+        saveClients(clients);
+        renderClientSelector();
+        sl.style.display = "inline";
+        clearTimeout(sl._t);
+        sl._t = setTimeout(function(){ sl.style.display="none"; }, 2500);
+      });
+    })(nameIn, urlIn, idx, savedLbl);
+    saveRow.appendChild(saveBtn);
+    saveRow.appendChild(savedLbl);
+    row.appendChild(saveRow);
     list.appendChild(row);
   });
 }
@@ -949,6 +976,14 @@ function addClientRow() {
   clients.push({name:"", scriptUrl:""});
   saveClients(clients);
   renderClientList();
+}
+
+function showSavedIndicator() {
+  var msg = document.getElementById("clientSavedMsg");
+  if (!msg) return;
+  msg.style.display = "block";
+  clearTimeout(msg._timer);
+  msg._timer = setTimeout(function(){ msg.style.display="none"; }, 2000);
 }
 
 window.addEventListener("load", function(){
