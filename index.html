@@ -166,6 +166,14 @@ textarea{resize:vertical;min-height:80px;line-height:1.6;}
   .rpt-photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;}
   .rpt-photo-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;border:1px solid #E0DDD4;}
 }
+
+/* Client selector */
+.client-selector-bar{background:var(--navy2);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;}
+.client-selector-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--gold);white-space:nowrap;}
+.client-selector-select{flex:1;background:var(--input-bg);border:1px solid var(--border);border-radius:5px;color:var(--white);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;padding:7px 12px;outline:none;cursor:pointer;}
+.client-selector-select:focus{border-color:var(--gold);}
+.client-none-warning{background:rgba(192,57,43,0.12);border:1px solid var(--red);border-radius:5px;padding:8px 14px;font-size:12px;color:#e74c3c;text-align:center;margin:0 16px 10px;}
+
 </style>
 </head>
 <body>
@@ -182,6 +190,13 @@ textarea{resize:vertical;min-height:80px;line-height:1.6;}
   <div class="nav-tab active" onclick="switchTab('form')">Inspection</div>
   <div class="nav-tab" onclick="switchTab('setup')">Setup</div>
 </div>
+<div class="client-selector-bar" id="clientSelectorBar">
+  <div class="client-selector-label">Client:</div>
+  <select class="client-selector-select" id="clientSelector" onchange="onClientSelect()">
+    <option value="">-- Select Client --</option>
+  </select>
+</div>
+<div class="client-none-warning" id="clientWarning" style="display:none;">No client selected &#8212; please select a client before submitting. Add clients in the Setup tab.</div>
 
 <!-- FORM -->
 <div id="page-form">
@@ -274,48 +289,19 @@ textarea{resize:vertical;min-height:80px;line-height:1.6;}
 <!-- SETUP -->
 <div id="page-setup" style="display:none;">
 <div class="wrap">
+  <div class="field-block">
+    <div class="section-head">Client Management</div>
+    <div class="qr-intro">Add each company you service here. Select them from the dropdown at the top of the form before starting an inspection. The correct Google Sheet URL will be used automatically.</div>
+    <div id="clientList"></div>
+    <button onclick="addClientRow()" style="margin-top:10px;background:transparent;border:1.5px solid var(--gold);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:9px 18px;border-radius:5px;cursor:pointer;width:100%;">+ Add Client</button>
+  </div>
+
   <div class="section-head">Google Sheet Setup</div>
   <div class="qr-intro">Connect this form to a dedicated Eyewash Inspection Sheet. Each submission logs automatically for real-time monitoring.</div>
 
   <div class="setup-step">
-    <div class="step-num">Step 1 &mdash; Create a new Google Sheet</div>
-    <div class="step-text">Go to <code>sheets.google.com</code> and create a new sheet named <code>Eyewash Inspection Log</code>. Add these headers in row 1:<br><br>
-    <code>Date | Location | Inspector | Unit Type | Result | Failed Items | Notes | Photos</code></div>
-  </div>
-  <div class="setup-step">
-    <div class="step-num">Step 2 &mdash; Open Apps Script</div>
-    <div class="step-text">In your Sheet click <code>Extensions</code> &rarr; <code>Apps Script</code>. Delete existing code, paste the script below, and click Save.</div>
-  </div>
-  <div class="script-box">function doPost(e) {
-  try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var data = JSON.parse(e.postData.contents);
-    sheet.appendRow([
-      data.date, data.location, data.inspector,
-      data.unitType, data.result, data.failedItems,
-      data.notes, data.photoCount + " photo(s)"
-    ]);
-    return ContentService.createTextOutput(JSON.stringify({status:"ok"})).setMimeType(ContentService.MimeType.JSON);
-  } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({status:"error",message:err.toString()})).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({status:"ok"})).setMimeType(ContentService.MimeType.JSON);
-}</div>
-  <button class="copy-btn" onclick="copyScript()">Copy Script</button>
-  <div class="setup-step">
-    <div class="step-num">Step 3 &mdash; Deploy as Web App</div>
-    <div class="step-text">Click <code>Deploy</code> &rarr; <code>New deployment</code>. Type: <code>Web app</code>. Execute as: <code>Me</code>. Access: <code>Anyone</code>. Click <code>Deploy</code> and authorize.</div>
-  </div>
-  <div class="setup-step">
-    <div class="step-num">Step 4 &mdash; Paste your Web App URL</div>
-    <div class="step-text">Copy the Web App URL and paste it here to connect the form.</div>
-    <div class="url-input-row">
-      <input type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/..." />
-      <button class="save-url-btn" onclick="saveScriptUrl()">Save</button>
-    </div>
-    <div id="urlSaveStatus" style="font-size:12px;color:var(--gold);margin-top:8px;"></div>
+    <div class="step-num">Step 4 &mdash; Add URL to Client above</div>
+    <div class="step-text">Copy the Web App URL after deploying and paste it into the <strong style="color:var(--gold);">Script URL</strong> field for that client in the <strong style="color:var(--gold);">Client Management</strong> section at the top of this Setup tab. The form will automatically use the correct URL when you select that client.</div>
   </div>
 </div>
 </div>
@@ -578,6 +564,7 @@ function submitInspection() {
   var verdict = failList.length > 0 ? "FAIL" : "PASS";
   var payload = {
     date: document.getElementById("inspectDate").value,
+    client: (document.getElementById("clientSelector")||{}).value||"",
     location: loc,
     inspector: name,
     unitType: unitType === "plumbed" ? "Plumbed" : "Self-Contained/Portable",
@@ -591,6 +578,8 @@ function submitInspection() {
   btn.disabled = true;
   btn.innerHTML = "<span class='spin'>&#x27F3;</span> Submitting...";
 
+  var sel = document.getElementById("clientSelector");
+  if (!sel || !sel.value) { alert("Please select a client before submitting."); btn.disabled=false; btn.textContent="Submit Inventory"; return; }
   var scriptUrl = localStorage.getItem(SCRIPT_URL_KEY) || "";
   function onDone() { showSuccess(verdict, payload, failList); }
   if (scriptUrl) {
@@ -873,7 +862,101 @@ function buildPrintReport() {
 
 function mk2(tag, cls) { var el=document.createElement(tag); if(cls) el.className=cls; return el; }
 
-window.addEventListener("load", function(){ init(); });
+
+var CLIENTS_KEY = "btm_clients";
+
+function loadClients() {
+  try { return JSON.parse(localStorage.getItem(CLIENTS_KEY)) || []; } catch(e) { return []; }
+}
+
+function saveClients(clients) {
+  localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+}
+
+function renderClientSelector() {
+  var clients = loadClients();
+  var sel = document.getElementById("clientSelector");
+  if (!sel) return;
+  var current = sel.value;
+  sel.innerHTML = '<option value="">-- Select Client --</option>';
+  clients.forEach(function(c) {
+    var opt = document.createElement("option");
+    opt.value = c.name;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
+  });
+  if (current) sel.value = current;
+  updateClientWarning();
+}
+
+function onClientSelect() {
+  var clients = loadClients();
+  var sel = document.getElementById("clientSelector");
+  var chosen = clients.find(function(c){ return c.name === sel.value; });
+  if (chosen && chosen.scriptUrl) {
+    localStorage.setItem(SCRIPT_URL_KEY, chosen.scriptUrl);
+  }
+  updateClientWarning();
+}
+
+function updateClientWarning() {
+  var warn = document.getElementById("clientWarning");
+  if (!warn) return;
+  var sel = document.getElementById("clientSelector");
+  warn.style.display = (!sel || !sel.value) ? "block" : "none";
+}
+
+function renderClientList() {
+  var clients = loadClients();
+  var list = document.getElementById("clientList");
+  if (!list) return;
+  list.innerHTML = "";
+  if (clients.length === 0) {
+    var empty = document.createElement("div");
+    empty.style.cssText = "font-size:13px;color:var(--muted);padding:10px 0;font-style:italic;";
+    empty.textContent = "No clients added yet. Click Add Client below.";
+    list.appendChild(empty);
+    return;
+  }
+  clients.forEach(function(c, idx) {
+    var row = document.createElement("div");
+    row.style.cssText = "background:var(--input-bg);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:12px 14px;margin-bottom:8px;";
+    var nameRow = document.createElement("div"); nameRow.style.cssText="display:flex;align-items:center;gap:8px;margin-bottom:8px;";
+    var nameLbl = document.createElement("label"); nameLbl.style.cssText="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;min-width:60px;margin:0;"; nameLbl.textContent="Company"; nameRow.appendChild(nameLbl);
+    var nameIn = document.createElement("input"); nameIn.type="text"; nameIn.value=c.name||""; nameIn.placeholder="Company name";
+    nameIn.style.cssText="flex:1;font-size:13px;padding:6px 10px;background:var(--input-bg);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:var(--white);font-family:'Barlow',sans-serif;outline:none;";
+    nameIn.addEventListener("input", function(){ clients[idx].name=nameIn.value; saveClients(clients); renderClientSelector(); });
+    nameRow.appendChild(nameIn);
+    var delBtn = document.createElement("button");
+    delBtn.style.cssText="background:transparent;border:1px solid rgba(192,57,43,0.4);color:#e74c3c;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;padding:5px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;";
+    delBtn.textContent="Remove";
+    delBtn.addEventListener("click", function(){ clients.splice(idx,1); saveClients(clients); renderClientList(); renderClientSelector(); });
+    nameRow.appendChild(delBtn);
+    row.appendChild(nameRow);
+    var urlRow = document.createElement("div"); urlRow.style.cssText="display:flex;align-items:center;gap:8px;";
+    var urlLbl = document.createElement("label"); urlLbl.style.cssText="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;min-width:60px;margin:0;"; urlLbl.textContent="Script URL"; urlRow.appendChild(urlLbl);
+    var urlIn = document.createElement("input"); urlIn.type="text"; urlIn.value=c.scriptUrl||""; urlIn.placeholder="https://script.google.com/macros/s/...";
+    urlIn.style.cssText="flex:1;font-size:11px;padding:6px 10px;background:var(--input-bg);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:var(--white);font-family:'Barlow',sans-serif;outline:none;";
+    urlIn.addEventListener("input", function(){ clients[idx].scriptUrl=urlIn.value; saveClients(clients); });
+    urlRow.appendChild(urlIn);
+    row.appendChild(urlRow);
+    list.appendChild(row);
+  });
+}
+
+function addClientRow() {
+  var clients = loadClients();
+  clients.push({name:"", scriptUrl:""});
+  saveClients(clients);
+  renderClientList();
+}
+
+window.addEventListener("load", function(){
+  init();
+  renderClientSelector();
+  renderClientList();
+  updateClientWarning();
+});
 </script>
 
 <div class="modal-overlay" id="emailModal">
